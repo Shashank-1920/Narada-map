@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev
 export default defineConfig({
-  base: '/narada-map/',
+  base: '/Narada-map/',
   plugins: [react()],
   server: {
     proxy: {
