@@ -31,7 +31,144 @@ const LANDMARK_COLORS = {
   'mosque': '#2980b9',
 };
 
+const COORDS = {
+  'Chengalpattu': [12.6924, 79.9761], 'Uthiramerur': [12.6079, 79.7542],
+  'Sriperumbudur': [12.9672, 79.9436], 'Mannargudi': [10.6658, 79.4522],
+  'Papanasam': [10.9236, 79.2718], 'Manachanallur': [10.8167, 78.8833],
+  'Musiri': [10.9522, 78.4482], 'Arani': [12.6700, 79.2800],
+  'Vandavasi': [12.5000, 79.6200], 'Tiruvallur Rural': [13.1430, 79.9050],
+  'Kumbakonam Outskirts': [10.9600, 79.3900], 'Madurantakam': [12.4960, 79.8930],
+  'Needamangalam': [10.7667, 79.4500], 'Thiruverumbur': [10.8700, 78.7300],
+  'Lalgudi': [10.8667, 78.8167], 'Kanchipuram': [12.8342, 79.7036],
+  'Tiruvannamalai': [12.2253, 79.0747], 'Vellore': [12.9165, 79.1325],
+  'Tiruvallur': [13.1430, 79.9050], 'Thiruttani': [13.1750, 79.6170],
+  'Pulivanam': [12.5500, 79.8000], 'Thiruvalangadu': [13.1800, 79.8500],
+  'Takkolam': [13.0000, 79.8000], 'Kelambakkam': [12.7840, 80.2200],
+  'Poonamallee': [13.0460, 80.1100], 'Kooram': [12.8000, 79.9000],
+  'Erumaivettipalayam': [11.3500, 77.7200], 'Sholingur': [13.1180, 79.4230],
+  'Narthamalai outskirts': [10.9200, 78.8700], 'Kalavakkam': [12.7000, 80.1000],
+  'Salavakkam': [12.8500, 79.8000], 'Tirumalai': [11.0500, 78.5500],
+  'Tiruvidanthai': [12.5340, 80.2140], 'Kilputhur': [11.8000, 79.1000],
+  'Kuvathur': [12.3500, 79.9000], 'Siyamangalam': [12.7500, 79.5500],
+  'Maduranthakam': [12.4960, 79.8930], 'Vilappakkam': [12.5500, 79.5000],
+  'Melpadi': [13.0200, 79.5500], 'Arcot': [12.9060, 79.3170],
+  'Kiranur': [10.9800, 78.7500], 'Kattur': [10.9000, 78.8000],
+  'Tiruninravur': [13.1180, 80.0530], 'Acharapakkam': [12.4890, 79.9650],
+  'Tirukarugavur Remote': [10.9300, 79.3500], 'Mamallapuram': [12.6200, 80.1930],
+  'Panapakkam': [12.9000, 79.6000], 'Kiliyur': [11.9500, 79.4000],
+  'Neman': [12.4000, 79.8500], 'Kaverypakkam': [12.9500, 79.8000],
+  'Thaiyur': [12.7500, 80.1500], 'Vallimalai': [12.8000, 79.1000],
+  'Walajabad': [12.7960, 79.8580], 'Manimangalam': [12.9000, 80.0500],
+  'Nangupatti': [10.9000, 78.6000], 'Kodumbalur': [10.9940, 78.7940],
+  'Tenneri': [11.8500, 79.2000],
+  'Tamil Nadu': [11.1271, 78.6569]
+};
+
+const parseCSV = (text) => {
+  const lines = [];
+  let row = [""];
+  let insideQuote = false;
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+    
+    if (char === '"') {
+      if (insideQuote && nextChar === '"') {
+        row[row.length - 1] += '"';
+        i++;
+      } else {
+        insideQuote = !insideQuote;
+      }
+    } else if (char === ',' && !insideQuote) {
+      row.push("");
+    } else if ((char === '\r' || char === '\n') && !insideQuote) {
+      if (char === '\r' && nextChar === '\n') {
+        i++;
+      }
+      lines.push(row);
+      row = [""];
+    } else {
+      row[row.length - 1] += char;
+    }
+  }
+  if (row.length > 1 || row[0] !== "") {
+    lines.push(row);
+  }
+  
+  if (lines.length === 0) return { headers: [], rows: [] };
+  
+  const headers = lines[0].map(h => h.trim());
+  const rows = lines.slice(1).filter(r => r.length > 0 && r.some(cell => cell.trim() !== ''));
+  
+  return { headers, rows };
+};
+
+const dfToRecords = (rows, headers) => {
+  return rows.map(row => {
+    const rec = {};
+    headers.forEach((header, index) => {
+      rec[header] = row[index] !== undefined ? String(row[index]).trim() : '';
+    });
+    
+    let latVal = rec._lat || rec.latitude || rec.lat || rec.lat_dec || rec.y;
+    let lonVal = rec._lon || rec.longitude || rec.lon || rec.lng || rec.lon_dec || rec.x;
+    
+    let lat = parseFloat(latVal);
+    let lon = parseFloat(lonVal);
+    
+    if (isNaN(lat) || isNaN(lon)) {
+      const loc = (rec['Location'] || '').trim();
+      let coords = COORDS[loc];
+      if (!coords) {
+        for (const [k, v] of Object.entries(COORDS)) {
+          if (k.toLowerCase().includes(loc.toLowerCase()) || loc.toLowerCase().includes(k.toLowerCase())) {
+            coords = v;
+            break;
+          }
+        }
+      }
+      if (!coords) {
+        coords = [11.1271 + (Math.random() * 2 - 1), 78.6569 + (Math.random() * 2 - 1)];
+      }
+      
+      lat = coords[0] + (Math.random() * 0.036 - 0.018);
+      lon = coords[1] + (Math.random() * 0.036 - 0.018);
+    }
+    
+    rec['_lat'] = Number(lat.toFixed(6));
+    rec['_lon'] = Number(lon.toFixed(6));
+    rec['_color'] = CONDITION_COLOR[rec['Condition']] || '#95a5a6';
+    rec['_region_color'] = REGION_COLOR[rec['Region']] || '#95a5a6';
+    
+    return rec;
+  });
+};
+
+const calculateStats = (filteredRecords) => {
+  const stats = {
+    total: filteredRecords.length,
+    Region: {},
+    Condition: {}
+  };
+  
+  filteredRecords.forEach(rec => {
+    const reg = rec['Region'];
+    if (reg) {
+      stats.Region[reg] = (stats.Region[reg] || 0) + 1;
+    }
+    
+    const cond = rec['Condition'];
+    if (cond) {
+      stats.Condition[cond] = (stats.Condition[cond] || 0) + 1;
+    }
+  });
+  
+  return stats;
+};
+
 function App() {
+  const [allRecords, setAllRecords] = useState([]);
   const [records, setRecords] = useState([]);
   const [filters, setFilters] = useState(null);
   const [stagedFilters, setStagedFilters] = useState({});
@@ -150,41 +287,89 @@ function App() {
     };
   }, []);
 
-  // Fetch data from Flask backend
-  const loadMap = (activeFiltersObj) => {
-    setLoading(true);
-    fetch('/api/data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(activeFiltersObj)
-    })
-      .then(r => r.json())
-      .then(data => {
-        setRecords(data.records || []);
-        setStats(data.stats);
-        setLoading(false);
-      })
-      .catch(() => {
-        showToast('Failed to load data', 'error');
-        setLoading(false);
-      });
+  // Client-side filtering
+  const applyClientSideFilters = (data, activeFilters) => {
+    let filtered = [...data];
+    
+    Object.entries(activeFilters).forEach(([category, selectedValues]) => {
+      if (selectedValues && selectedValues.length > 0) {
+        filtered = filtered.filter(rec => {
+          const val = rec[category];
+          return val && selectedValues.includes(val);
+        });
+      }
+    });
+    
+    const calculatedStats = calculateStats(filtered);
+    setRecords(filtered);
+    setStats(calculatedStats);
   };
 
-  // Fetch Landmarks for a focused Temple
+  const loadMap = (activeFiltersObj) => {
+    setLoading(true);
+    setTimeout(() => {
+      applyClientSideFilters(allRecords, activeFiltersObj);
+      setLoading(false);
+    }, 150);
+  };
+
+  // Fetch Landmarks for a focused Temple via public Overpass API client-side
   const fetchAndRenderLandmarks = (lat, lon) => {
     if (!landmarkMarkersRef.current) return;
     landmarkMarkersRef.current.clearLayers();
     showToast('Searching nearby landmarks...');
 
-    fetch('/api/landmarks', {
+    const query = `
+    [out:json];
+    (
+      node["amenity"](around:5000,${lat},${lon});
+      node["shop"](around:5000,${lat},${lon});
+      node["tourism"](around:5000,${lat},${lon});
+      node["natural"](around:5000,${lat},${lon});
+      node["leisure"](around:5000,${lat},${lon});
+    );
+    out center;
+    `;
+
+    fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lat, lon })
+      body: query
     })
-      .then(r => r.json())
-      .then(data => {
-        if (data.landmarks && landmarkMarkersRef.current) {
-          data.landmarks.forEach(landmark => {
+      .then(r => {
+        if (!r.ok) throw new Error("Overpass error");
+        return r.json();
+      })
+      .then(osmData => {
+        if (osmData.elements && landmarkMarkersRef.current) {
+          const landmarks = [];
+          osmData.elements.slice(0, 100).forEach(elem => {
+            let lat_l, lon_l;
+            if (elem.center) {
+              lat_l = elem.center.lat;
+              lon_l = elem.center.lon;
+            } else if (elem.lat) {
+              lat_l = elem.lat;
+              lon_l = elem.lon;
+            } else {
+              return;
+            }
+
+            const tags = elem.tags || {};
+            const name = tags.name || 'Unnamed Landmark';
+            const amenity = tags.amenity || '';
+            const shop = tags.shop || '';
+            const tourism = tags.tourism || '';
+            const landmark_type = amenity || shop || tourism || 'landmark';
+
+            landmarks.push({
+              name,
+              type: landmark_type,
+              lat: lat_l,
+              lon: lon_l
+            });
+          });
+
+          landmarks.forEach(landmark => {
             const color = LANDMARK_COLORS[landmark.type] || '#95a5a6';
             const landmarkMarker = L.circleMarker([landmark.lat, landmark.lon], {
               radius: 4.5,
@@ -203,7 +388,7 @@ function App() {
 
             landmarkMarkersRef.current.addLayer(landmarkMarker);
           });
-          showToast(`Found ${data.landmarks.length} landmarks!`);
+          showToast(`Found ${landmarks.length} landmarks!`);
         }
       })
       .catch(() => {
@@ -262,28 +447,54 @@ function App() {
       return;
     }
     setLoading(true);
-    const fd = new FormData();
-    fd.append('file', file);
 
-    fetch('/api/upload', { method: 'POST', body: fd })
-      .then(r => r.json())
-      .then(data => {
-        setLoading(false);
-        if (data.error) {
-          showToast(data.error, 'error');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        const { headers, rows } = parseCSV(text);
+        
+        if (headers.length === 0 || rows.length === 0) {
+          showToast('CSV is empty or invalid', 'error');
+          setLoading(false);
           return;
         }
-        setFilters(data.filters);
-        setUploadedFile({ name: file.name, rows: data.rows });
+        
+        // Convert rows to records with injected coordinates
+        const parsedRecords = dfToRecords(rows, headers);
+        
+        // Filter options for columns
+        const opts = {};
+        const colsToFilter = ['Region', 'Era', 'Condition', 'Primary Threat', 'Deity', 'Location'];
+        colsToFilter.forEach(col => {
+          if (headers.includes(col)) {
+            const uniqueVals = Array.from(new Set(parsedRecords.map(r => r[col]).filter(Boolean))).sort();
+            opts[col] = uniqueVals;
+          }
+        });
+        
+        setAllRecords(parsedRecords);
+        setFilters(opts);
+        setUploadedFile({ name: file.name, rows: parsedRecords.length });
         setStagedFilters({});
         setAppliedFilters({});
-        loadMap({});
-        showToast('Upload successful!');
-      })
-      .catch(() => {
+        
+        const initialStats = calculateStats(parsedRecords);
+        setRecords(parsedRecords);
+        setStats(initialStats);
+        
         setLoading(false);
-        showToast('Upload failed', 'error');
-      });
+        showToast('Upload successful!');
+      } catch (err) {
+        setLoading(false);
+        showToast('Failed to parse CSV file', 'error');
+      }
+    };
+    reader.onerror = () => {
+      setLoading(false);
+      showToast('Failed to read CSV file', 'error');
+    };
+    reader.readAsText(file);
   };
 
   const handleDrop = (e) => {
@@ -334,27 +545,44 @@ function App() {
 
   // CSV Export
   const exportCSV = () => {
+    if (records.length === 0) {
+      showToast('No records to export', 'error');
+      return;
+    }
+    
     setLoading(true);
-    fetch('/api/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(appliedFilters)
-    })
-      .then(r => r.blob())
-      .then(blob => {
-        setLoading(false);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'filtered_temples.csv';
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('Export ready!');
-      })
-      .catch(() => {
-        setLoading(false);
-        showToast('Export failed', 'error');
+    try {
+      const headers = Object.keys(records[0]).filter(key => !key.startsWith('_'));
+      const csvRows = [];
+      csvRows.push(headers.join(','));
+      
+      records.forEach(rec => {
+        const values = headers.map(header => {
+          let val = rec[header] || '';
+          if (val.includes('"') || val.includes(',') || val.includes('\n') || val.includes('\r')) {
+            val = `"${val.replace(/"/g, '""')}"`;
+          }
+          return val;
+        });
+        csvRows.push(values.join(','));
       });
+      
+      const csvString = csvRows.join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'filtered_temples.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      setLoading(false);
+      showToast('Export ready!');
+    } catch (err) {
+      setLoading(false);
+      showToast('Export failed', 'error');
+    }
   };
 
   // Chat message submission
@@ -370,74 +598,64 @@ function App() {
     const tempBotMessageId = Date.now();
     setChatMessages(prev => [...prev, { id: tempBotMessageId, sender: 'bot', text: 'Typing...' }]);
 
-    fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text })
-    })
-      .then(res => {
-        if (!res.ok) throw new Error("Offline");
-        return res.json();
-      })
-      .then(data => {
-        // Remove typing indicator and add real bot reply
-        setChatMessages(prev => prev.filter(m => m.id !== tempBotMessageId).concat({
-          sender: 'bot',
-          text: data.response || "No reply from assistant."
-        }));
-      })
-      .catch(() => {
-        // Fallback mock responses when API is offline (RAG disconnected mode)
-        setTimeout(() => {
-          const q = text.toLowerCase();
-          let botResponse = "";
+    setTimeout(() => {
+      const q = text.toLowerCase();
+      let botResponse = "";
 
-          if (!records || records.length === 0) {
-            botResponse = "[RAG Offline Mode] Please upload a temple CSV dataset first using the panel on the left, so I can analyze and filter the map for you!";
-          }
-          else if (q.includes("reset") || q.includes("clear") || q.includes("show all")) {
-            setStagedFilters({});
-            setAppliedFilters({});
-            loadMap({});
-            botResponse = "[RAG Offline Mode] I have reset all filters. Map shows all temples.";
-          } 
-          else if (q.includes("chola") || q.includes("pallava") || q.includes("thondai")) {
-            let region = "";
-            if (q.includes("chola")) region = "Chola Mandala";
-            else if (q.includes("pallava")) region = "Pallava Mandala";
-            else if (q.includes("thondai")) region = "Thondaimandala";
-            
-            const newFilters = { Region: [region] };
-            setStagedFilters(newFilters);
-            setAppliedFilters(newFilters);
-            loadMap(newFilters);
-            botResponse = `[RAG Offline Mode] Filtered map for ${region} temples.`;
-          }
-          else if (q.includes("ruined") || q.includes("critically endangered") || q.includes("decay") || q.includes("neglected") || q.includes("dilapidated") || q.includes("buried")) {
-            let cond = "";
-            if (q.includes("ruined")) cond = "Ruined";
-            else if (q.includes("critically endangered")) cond = "Critically Endangered";
-            else if (q.includes("decay")) cond = "Advanced Decay";
-            else if (q.includes("neglected")) cond = "Neglected";
-            else if (q.includes("dilapidated")) cond = "Dilapidated";
-            else if (q.includes("buried")) cond = "Buried";
-            
-            const newFilters = { Condition: [cond] };
-            setStagedFilters(newFilters);
-            setAppliedFilters(newFilters);
-            loadMap(newFilters);
-            botResponse = `[RAG Offline Mode] Filtered map for temples in ${cond} condition.`;
-          }
-          else {
-            botResponse = `[RAG Offline Mode] Assistant RAG API is not connected. User message: "${text}". Once connected, I will search your vector database to answer!`;
-          }
+      if (!allRecords || allRecords.length === 0) {
+        botResponse = "Please upload a temple CSV dataset first using the panel on the left, so I can analyze and filter the map for you!";
+      }
+      else if (q.includes("reset") || q.includes("clear") || q.includes("show all") || q.includes("show-all")) {
+        setStagedFilters({});
+        setAppliedFilters({});
+        applyClientSideFilters(allRecords, {});
+        botResponse = "I have reset all filters. Map shows all temples.";
+      } 
+      else if (q.includes("chola") || q.includes("pallava") || q.includes("thondai")) {
+        let region = "";
+        if (q.includes("chola")) region = "Chola Mandala";
+        else if (q.includes("pallava")) region = "Pallava Mandala";
+        else if (q.includes("thondai")) region = "Thondaimandala";
+        
+        const newFilters = { Region: [region] };
+        setStagedFilters(newFilters);
+        setAppliedFilters(newFilters);
+        applyClientSideFilters(allRecords, newFilters);
+        botResponse = `Filtered map for ${region} temples.`;
+      }
+      else if (q.includes("ruined") || q.includes("critically endangered") || q.includes("decay") || q.includes("neglected") || q.includes("dilapidated") || q.includes("buried")) {
+        let cond = "";
+        if (q.includes("ruined")) cond = "Ruined";
+        else if (q.includes("critically endangered")) cond = "Critically Endangered";
+        else if (q.includes("decay")) cond = "Advanced Decay";
+        else if (q.includes("neglected")) cond = "Neglected";
+        else if (q.includes("dilapidated")) cond = "Dilapidated";
+        else if (q.includes("buried")) cond = "Buried";
+        
+        const newFilters = { Condition: [cond] };
+        setStagedFilters(newFilters);
+        setAppliedFilters(newFilters);
+        applyClientSideFilters(allRecords, newFilters);
+        botResponse = `Filtered map for temples in ${cond} condition.`;
+      }
+      else {
+        // Simple search in temple names or location
+        const match = allRecords.find(rec => 
+          (rec['Temple Name'] && rec['Temple Name'].toLowerCase().includes(q)) ||
+          (rec['Location'] && rec['Location'].toLowerCase().includes(q))
+        );
+        if (match) {
+          botResponse = `Found temple: ${match['Temple Name']} located in ${match['Location'] || 'Unknown location'}. Era: ${match['Era'] || 'Unknown'}, Condition: ${match['Condition'] || 'Unknown'}. Deity: ${match['Deity'] || 'Unknown'}.`;
+        } else {
+          botResponse = `I processed your message: "${text}". I couldn't find a direct match. Try asking to filter by region (e.g. Chola, Pallava) or condition (e.g. ruined, neglected), or enter a temple name!`;
+        }
+      }
 
-          setChatMessages(prev => prev.filter(m => m.id !== tempBotMessageId).concat({
-            sender: 'bot',
-            text: botResponse
-          }));
-        }, 600);
-      });
+      setChatMessages(prev => prev.filter(m => m.id !== tempBotMessageId).concat({
+        sender: 'bot',
+        text: botResponse
+      }));
+    }, 600);
   };
 
   // Directory Selection
